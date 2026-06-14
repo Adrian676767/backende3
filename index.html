@@ -5,108 +5,109 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Školská Databáza Žiakov</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
     <style>
-        /* (Pôvodné CSS ponechávam, pridávam len úpravu pre img) */
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Outfit:wght@700;800&display=swap');
         :root { --bg-main: #e2e8f0; --text-main: #0f172a; --text-muted: #64748b; --primary: #6366f1; --primary-gradient: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); --accent: #14b8a6; --card-bg: rgba(255, 255, 255, 0.85); --border-color: rgba(226, 232, 240, 0.8); --radius-lg: 14px; --radius-xl: 20px; --transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
         body { background-color: var(--bg-main); font-family: 'Inter', sans-serif; margin: 0; padding: 0; min-height: 100vh; }
-        
-        /* ÚPRAVA PRE AVATARY */
-        .student-img { width: 100%; height: 100%; object-fit: cover; display: block; }
-        
-        /* Ostatné štýly z tvojho pôvodného kódu... */
         .container { max-width: 1140px; margin: 0 auto; padding: 3rem 1.5rem; }
-        .header-area { display: flex; flex-direction: column; gap: 1.5rem; margin-bottom: 3rem; }
-        .stats-box { background: var(--card-bg); padding: 1.25rem 1.75rem; border-radius: var(--radius-xl); border: 1px solid var(--border-color); display: flex; gap: 2rem; }
-        .controls-panel { background: var(--card-bg); padding: 1.25rem; border-radius: var(--radius-xl); border: 1px solid var(--border-color); margin-bottom: 2.5rem; display: flex; justify-content: space-between; align-items: center; }
-        .students-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.75rem; }
-        .student-card { background: var(--card-bg); border-radius: var(--radius-xl); padding: 1.75rem; transition: var(--transition); }
-        .avatar-container { width: 56px; height: 56px; border-radius: 50%; overflow: hidden; background: #e2e8f0; }
+        .student-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .avatar-container { width: 56px; height: 56px; border-radius: 50%; overflow: hidden; background: #f1f5f9; }
         
-        /* (Sem doplň zvyšok tvojich pôvodných štýlov...) */
+        /* Animácia písania */
+        .typing-dots { display: flex; gap: 4px; padding: 10px; }
+        .typing-dots span { width: 8px; height: 8px; background: #6366f1; border-radius: 50%; animation: bounce 1.4s infinite ease-in-out both; }
+        .typing-dots span:nth-child(1) { animation-delay: -0.32s; }
+        .typing-dots span:nth-child(2) { animation-delay: -0.16s; }
+        @keyframes bounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
+        
+        /* Ostatné štýly zostávajú ako boli (v skrátenej verzii pre prehľadnosť) */
+        .students-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.75rem; }
+        .student-card { background: var(--card-bg); border-radius: var(--radius-xl); padding: 1.75rem; border: 1px solid var(--border-color); }
+        .msg { max-width: 80%; padding: 0.65rem 0.9rem; border-radius: 14px; font-size: 0.85rem; margin-bottom: 0.5rem; }
+        .msg.user { background: #e2e8f0; align-self: flex-end; }
+        .msg.ai { background: #e0e7ff; align-self: flex-start; }
+        .ai-chat-window { position: fixed; bottom: 2rem; right: 2rem; width: 360px; height: 480px; background: white; border-radius: var(--radius-xl); display: none; flex-direction: column; overflow: hidden; box-shadow: 0 12px 32px rgba(0,0,0,0.15); }
+        .ai-chat-window.open { display: flex; }
     </style>
 </head>
 <body>
 
     <div class="container">
-        <div class="header-area">
-            <div class="header-title">
-                <h1>Triedna Databáza</h1>
-                <p>Prehľad žiakov, ich veku, výšky a individuálny AI chat</p>
-            </div>
-            <div class="stats-box">
-                <div class="stat-item">
-                    <span class="stat-label">Celkovo žiakov</span>
-                    <span class="stat-value total" id="totalStudents">0</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-label">Priemerná výška</span>
-                    <span class="stat-value height" id="avgHeight">0 cm</span>
-                </div>
-            </div>
-        </div>
-
-        <div class="controls-panel">
-            <input type="text" id="searchInput" class="search-input" placeholder="Hľadať žiaka...">
-            <div class="sort-group">
-                <button class="btn-sort active" id="sortName">Mena</button>
-                <button class="btn-sort" id="sortAge">Veku</button>
-                <button class="btn-sort" id="sortHeight">Výšky</button>
-            </div>
-        </div>
-
         <div class="students-grid" id="studentsGrid"></div>
+    </div>
+
+    <div class="ai-chat-window" id="chatWindow">
+        <div class="chat-header"><h4>Chat</h4><button id="closeChat">×</button></div>
+        <div class="chat-messages" id="chatMessages"></div>
+        <div class="chat-footer">
+            <input type="text" id="chatInput" placeholder="Napíš správu...">
+            <button id="sendChatBtn">Odoslať</button>
+        </div>
     </div>
 
     <script>
         let allStudents = [];
-        let currentSort = 'name';
+        let activeStudent = null;
 
         async function fetchStudents() {
-            try {
-                const response = await fetch(`/students?sort=${currentSort}`);
-                allStudents = await response.json();
-                updateStats();
-                renderStudents(allStudents);
-            } catch (error) { console.error("Chyba:", error); }
+            const response = await fetch('/students');
+            allStudents = await response.json();
+            renderStudents(allStudents);
         }
 
         function renderStudents(studentsList) {
-            const studentsGrid = document.getElementById('studentsGrid');
-            studentsGrid.innerHTML = '';
+            const grid = document.getElementById('studentsGrid');
+            grid.innerHTML = '';
             studentsList.forEach(student => {
-                const isFemale = student.name.trim().endsWith('á') || student.name.trim().endsWith('ová');
-                // POUŽITIE DICEBEAR API
-                const imgUrl = `https://api.dicebear.com/9.x/adventurer/svg?seed=${encodeURIComponent(student.name)}`;
-
+                const imgUrl = `https://api.dicebear.com/9.x/lorelei/svg?seed=${encodeURIComponent(student.name)}`;
                 const card = document.createElement('div');
-                card.className = `student-card`;
+                card.className = 'student-card';
                 card.innerHTML = `
-                    <div class="card-header">
-                        <div class="avatar-container">
-                            <img src="${imgUrl}" class="student-img" alt="${student.name}">
-                        </div>
-                        <div class="student-info">
-                            <h3>${student.name}</h3>
-                            <span class="badge">ID: #${student.id}</span>
-                        </div>
-                    </div>
-                    <div class="card-stats">
-                        <div class="card-stat-box"><span class="card-stat-label">Vek</span><span class="card-stat-value">${student.age}</span></div>
-                        <div class="card-stat-box"><span class="card-stat-label">Výška</span><span class="card-stat-value">${student.vyska} cm</span></div>
-                    </div>
+                    <div class="avatar-container"><img src="${imgUrl}" class="student-img"></div>
+                    <h3>${student.name}</h3>
+                    <button class="btn-chat">Napísať správu</button>
                 `;
-                studentsGrid.appendChild(card);
+                card.querySelector('.btn-chat').onclick = () => {
+                    activeStudent = student;
+                    document.getElementById('chatWindow').classList.add('open');
+                };
+                grid.appendChild(card);
             });
         }
 
-        function updateStats() {
-            totalStudentsEl.innerText = allStudents.length;
-            const avg = Math.round(allStudents.reduce((s, st) => s + st.vyska, 0) / allStudents.length);
-            document.getElementById('avgHeight').innerText = `${avg} cm`;
+        function appendMessage(text, sender) {
+            const msgDiv = document.createElement('div');
+            const uniqueId = 'msg-' + Date.now();
+            msgDiv.id = uniqueId;
+            msgDiv.className = `msg ${sender}`;
+            if (text === 'typing') {
+                msgDiv.innerHTML = '<div class="typing-dots"><span></span><span></span><span></span></div>';
+            } else {
+                msgDiv.innerText = text;
+            }
+            document.getElementById('chatMessages').appendChild(msgDiv);
+            return uniqueId;
         }
 
+        async function handleSendMessage() {
+            const input = document.getElementById('chatInput');
+            const text = input.value.trim();
+            if (!text) return;
+            appendMessage(text, 'user');
+            input.value = '';
+            const loadingId = appendMessage('typing', 'ai');
+
+            const res = await fetch('/chat', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ message: text, student_info: activeStudent })
+            });
+            const data = await res.json();
+            document.getElementById(loadingId).innerText = data.response;
+        }
+
+        document.getElementById('sendChatBtn').onclick = handleSendMessage;
+        document.getElementById('closeChat').onclick = () => document.getElementById('chatWindow').classList.remove('open');
         fetchStudents();
     </script>
 </body>
